@@ -267,6 +267,15 @@
 				if (musicVolume !== undefined) BattleSound.setBgmVolume(musicVolume);
 
 				if (Tools.prefs('logchat')) Storage.startLoggingChat();
+				if (Tools.prefs('showdebug')) {
+					var debugStyle = $('#debugstyle').get(0);
+					var onCSS = '.debug {display: block;}';
+					if (!debugStyle) {
+						$('head').append('<style id="debugstyle">'+onCSS+'</style>');
+					} else {
+						debugStyle.innerHTML = onCSS;
+					}
+				}
 			});
 
 			this.on('init:unsupported', function() {
@@ -998,7 +1007,7 @@
 		 *********************************************************/
 
 		initializeRooms: function() {
-			this.rooms = {};
+			this.rooms = Object.create(null); // {}
 
 			$(window).on('resize', _.bind(this.resize, this));
 		},
@@ -1331,6 +1340,11 @@
 			// shorthand for adding a popup message
 			// this is the equivalent of alert(message)
 			app.addPopup(Popup, {message: message});
+		},
+		addPopupPrompt: function(message, buttonOrCallback, callback) {
+			var button = (callback ? buttonOrCallback : 'OK');
+			callback = (!callback ? buttonOrCallback : callback);
+			app.addPopup(PromptPopup, { message: message, button: button, callback: callback });
 		},
 		closePopup: function(id) {
 			if (this.popups.length) {
@@ -1857,6 +1871,26 @@
 		}
 	});
 
+	var PromptPopup = this.PromptPopup = Popup.extend({
+		type: 'semimodal',
+		initialize: function(data) {
+			if (!data || !data.message || typeof data.callback !== "function") return;
+			this.callback = data.callback;
+
+			var buf = '<form>';
+			buf += '<p><label class="label">' + data.message;
+			buf += '<input class="textbox autofocus" type="text" name="data" /></label></p>';
+			buf += '<p class="buttonbar"><button type="submit"><strong>' + data.button + '</strong></button> <button name="close">Cancel</button></p>';
+			buf += '</form>';
+
+			this.$el.html(buf);
+		},
+		submit: function(data) {
+			this.close();
+			this.callback(data.data);
+		}
+	});
+
 	var UserPopup = this.UserPopup = Popup.extend({
 		initialize: function(data) {
 			data.userid = toId(data.name);
@@ -2228,12 +2262,14 @@
 		},
 		events: {
 			'change input[name=noanim]': 'setNoanim',
+			'change input[name=notournaments]': 'setNotournaments',
 			'change input[name=nolobbypm]': 'setNolobbypm',
 			'change input[name=temporarynotifications]': 'setTemporaryNotifications',
 			'change input[name=ignorespects]': 'setIgnoreSpects',
 			'change select[name=bg]': 'setBg',
 			'change select[name=timestamps-lobby]': 'setTimestampsLobby',
 			'change select[name=timestamps-pms]': 'setTimestampsPMs',
+			'change select[name=room-order]': 'setRoomOrder',
 			'change input[name=logchat]': 'setLogChat',
 			'change input[name=selfhighlight]': 'setSelfHighlight',
 			'click img': 'avatars'
@@ -2249,6 +2285,7 @@
 			buf += '<hr />';
 			buf += '<p><label class="optlabel">Background: <select name="bg"><option value="">Charizards</option><option value="#344b6c url(/fx/client-bg-horizon.jpg) no-repeat left center fixed">Horizon</option><option value="#546bac url(/fx/client-bg-3.jpg) no-repeat left center fixed">Waterfall</option><option value="#546bac url(/fx/client-bg-ocean.jpg) no-repeat left center fixed">Ocean</option><option value="#344b6c">Solid blue</option>'+(Tools.prefs('bg')?'<option value="" selected></option>':'')+'</select></label></p>';
 			buf += '<p><label class="optlabel"><input type="checkbox" name="noanim"'+(Tools.prefs('noanim')?' checked':'')+' /> Disable animations</label></p>';
+			buf += '<p><label class="optlabel"><input type="checkbox" name="notournaments"'+(Tools.prefs('notournaments')?' checked':'')+' /> Ignore tournaments</label></p>';
 			buf += '<p><label class="optlabel"><input type="checkbox" name="nolobbypm"'+(Tools.prefs('nolobbypm')?' checked':'')+' /> Don\'t show PMs in lobby chat</label></p>';
 			buf += '<p><label class="optlabel"><input type="checkbox" name="selfhighlight"'+(!Tools.prefs('noselfhighlight')?' checked':'')+'> Highlight when your name is said in chat</label></p>';
 
@@ -2257,8 +2294,10 @@
 			}
 
 			var timestamps = this.timestamps = (Tools.prefs('timestamps') || {});
+			var order = this.order = (Tools.prefs('order') || {});
 			buf += '<p><label class="optlabel">Timestamps in lobby chat: <select name="timestamps-lobby"><option value="off">Off</option><option value="minutes"'+(timestamps.lobby==='minutes'?' selected="selected"':'')+'>[HH:MM]</option><option value="seconds"'+(timestamps.lobby==='seconds'?' selected="selected"':'')+'>[HH:MM:SS]</option></select></label></p>';
-			buf += '<p><label class="optlabel">Timestamps in PM\'s: <select name="timestamps-pms"><option value="off">Off</option><option value="minutes"'+(timestamps.pms==='minutes'?' selected="selected"':'')+'>[HH:MM]</option><option value="seconds"'+(timestamps.pms==='seconds'?' selected="selected"':'')+'>[HH:MM:SS]</option></select></label></p>';
+			buf += '<p><label class="optlabel">Timestamps in PMs: <select name="timestamps-pms"><option value="off">Off</option><option value="minutes"'+(timestamps.pms==='minutes'?' selected="selected"':'')+'>[HH:MM]</option><option value="seconds"'+(timestamps.pms==='seconds'?' selected="selected"':'')+'>[HH:MM:SS]</option></select></label></p>';
+			buf += '<p><label class="optlabel">Room list ordering: <select name="room-order"><option value="userCount">User count</option><option value="alphabetical"'+(order==='alphabetical'?' selected="selected"':'')+'>Alphabetical</option></select></lable></p>';
 			buf += '<p><label class="optlabel">Chat preferences: <button name="formatting">Edit formatting</button></label></p>';
 
 			if (app.curRoom.battle) {
@@ -2307,6 +2346,10 @@
 			var noanim = !!e.currentTarget.checked;
 			Tools.prefs('noanim', noanim);
 		},
+		setNotournaments: function(e) {
+			var notournaments = !!e.currentTarget.checked;
+			Tools.prefs('notournaments', notournaments);
+		},
 		setSelfHighlight: function(e) {
 			var noselfhighlight = !e.currentTarget.checked;
 			Tools.prefs('noselfhighlight', noselfhighlight);
@@ -2340,6 +2383,11 @@
 		setTimestampsPMs: function(e) {
 			this.timestamps.pms = e.currentTarget.value;
 			Tools.prefs('timestamps', this.timestamps);
+		},
+		setRoomOrder: function(e) {
+			this.order = e.currentTarget.value;
+			Tools.prefs('order', this.order);
+			app.trigger('response:rooms');
 		},
 		avatars: function() {
 			app.addPopup(AvatarsPopup);

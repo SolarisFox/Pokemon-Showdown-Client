@@ -402,17 +402,37 @@
 			case 'challenge':
 				var targets = target.split(',').map($.trim);
 
-				if (!targets[0]) targets[0] = prompt('Who?');
-				target = toId(targets[0]);
-				this.challengeData = { userid: target, format: targets[1] || '', team: targets[2] || '' };
-				app.on('response:userdetails', this.challengeUserdetails, this);
-				app.send('/cmd userdetails '+target);
+				var self = this;
+				var challenge = function(targets) {
+					target = toId(targets[0]);
+					self.challengeData = { userid: target, format: targets[1] || '', team: targets[2] || '' };
+					app.on('response:userdetails', self.challengeUserdetails, self);
+					app.send('/cmd userdetails '+target);
+				};
+
+				if (!targets[0]) {
+					app.addPopupPrompt("Who would you like to challenge?", "Challenge user", function(target) {
+						if (!target) return;
+						challenge([target]);
+					});
+					return false;
+				}
+				challenge(targets);
 				return false;
 
 			case 'user':
 			case 'open':
-				if (!target) target = prompt('Who?');
-				if (target) app.addPopup(UserPopup, {name: target});
+				var open = function(target) {
+					app.addPopup(UserPopup, {name: target});
+				};
+				if (!target) {
+					app.addPopupPrompt("Whose user window would you like to open?", "Open", function(target) {
+						if (!target) return;
+						open(target);
+					});
+					return false;
+				}
+				open(target);
 				return false;
 
 			case 'ignore':
@@ -446,6 +466,29 @@
 					app.user.rename(target);
 				} else {
 					app.addPopup(LoginPopup);
+				}
+				return false;
+
+			case 'showdebug':
+				this.add('Debug battle messages: ON');
+				Tools.prefs('showdebug', true);
+				var debugStyle = $('#debugstyle').get(0);
+				var onCSS = '.debug {display: block;}';
+				if (!debugStyle) {
+					$('head').append('<style id="debugstyle">'+onCSS+'</style>');
+				} else {
+					debugStyle.innerHTML = onCSS;
+				}
+				return false;
+			case 'hidedebug':
+				this.add('Debug battle messages: HIDDEN');
+				Tools.prefs('showdebug', false);
+				var debugStyle = $('#debugstyle').get(0);
+				var offCSS = '.debug {display: none;}';
+				if (!debugStyle) {
+					$('head').append('<style id="debugstyle">'+offCSS+'</style>');
+				} else {
+					debugStyle.innerHTML = offCSS;
 				}
 				return false;
 
@@ -497,6 +540,24 @@
 				}
 				this.add('Timestamps preference set to: `' + targets[1] + '` for `' + targets[0] + '`.');
 				Tools.prefs('timestamps', timestamps);
+				return false;
+				
+			case 'order':
+				if (['user count', 'alphabetical'].indexOf(target) === -1) {
+					this.add('Error: Invalid /order command');
+					return '/help order';	// show help
+				}
+				switch (target) {
+				case 'user count':
+					order = target;
+					break;
+				case 'alphabetical':
+					order = target;
+					break;
+				}
+				this.add('Room order preference set to: `' + target + '`.');
+				Tools.prefs('order', order);
+				app.trigger('response:rooms');
 				return false;
 
 			case 'highlight':
@@ -573,14 +634,16 @@
 									buffer += '<em>'+Math.round(row.rpr)+'<small> &#177; '+Math.round(row.rprd)+'</small></em>';
 								}
 								var N=parseInt(row.w)+parseInt(row.l)+parseInt(row.t);
-								if (row.formatid === 'lcsuspecttest') {
-									buffer += '<td>'+Math.round(40.0*parseFloat(row.gxe)*Math.pow(2.0,-43.0/N),0)+'</td>';
-								} else if (row.formatid === 'oususpecttest') {
+								if (row.formatid === 'oususpecttest') {
 									buffer += '<td>'+Math.round(40.0*parseFloat(row.gxe)*Math.pow(2.0,-17.0/N),0)+'</td>';
-								} else if (row.formatid === 'smogondoublescurrent' || row.formatid === 'smogondoublessuspecttest') {
-									buffer += '<td>'+Math.round(40.0*parseFloat(row.gxe)*Math.pow(2.0,-15.0/N),0)+'</td>';
+								} else if (row.formatid === 'uberssuspecttest') {
+									buffer += '<td>'+Math.round(40.0*parseFloat(row.gxe)*Math.pow(2.0,-29.0/N),0)+'</td>';
 								} else if (row.formatid === 'rususpecttest') {
 									buffer += '<td>'+Math.round(40.0*parseFloat(row.gxe)*Math.pow(2.0,-20.0/N),0)+'</td>';
+								} else if (row.formatid === 'lcsuspecttest') {
+									buffer += '<td>'+Math.round(40.0*parseFloat(row.gxe)*Math.pow(2.0,-43.0/N),0)+'</td>';
+								} else if (row.formatid === 'smogondoublescurrent' || row.formatid === 'smogondoublessuspecttest') {
+									buffer += '<td>'+Math.round(40.0*parseFloat(row.gxe)*Math.pow(2.0,-15.0/N),0)+'</td>';
 								} else {
 									buffer += '<td>--</td>';
 								}
@@ -594,17 +657,17 @@
 				return false;
 
 			case 'buttonban':
-				var reason = prompt('Why do you wish to ban this user?');
-				if (reason === null) return false;
-				if (reason === false) reason = '';
-				this.send('/ban ' + target + ', ' + reason);
+				var self = this;
+				app.addPopupPrompt("Why do you wish to ban this user?", "Ban user", function(reason) {
+					self.send('/ban ' + target + ', ' + (reason || ''));
+				});
 				return false;
 
 			case 'buttonmute':
-				var reason = prompt('Why do you wish to mute this user?');
-				if (reason === null) return false;
-				if (reason === false) reason = '';
-				this.send('/mute ' + target + ', ' + reason);
+				var self = this;
+				app.addPopupPrompt("Why do you wish to mute this user?", "Mute user", function(reason) {
+					self.send('/mute ' + target + ', ' + (reason || ''));
+				});
 				return false;
 
 			case 'buttonunmute':
@@ -612,10 +675,10 @@
 				return false;
 
 			case 'buttonkick':
-				var reason = prompt('Why do you wish to kick this user?');
-				if (reason === null) return false;
-				if (reason === false) reason = '';
-				this.send('/kick ' + target + ', ' + reason);
+				var self = this;
+				app.addPopupPrompt("Why do you wish to kick this user?", "Kick user", function(reason) {
+					self.send('/kick ' + target + ', ' + (reason || ''));
+				});
 				return false;
 
 			case 'join':
@@ -854,9 +917,9 @@
 
 				case 'tournament':
 				case 'tournaments':
+					if (Tools.prefs('notournaments')) break;
 					if (!this.tournamentBox) this.tournamentBox = new TournamentBox(this, this.$tournamentWrapper);
-					if (!this.tournamentBox.parseMessage(row.slice(1), row[0] === 'tournaments'))
-						break;
+					if (!this.tournamentBox.parseMessage(row.slice(1), row[0] === 'tournaments')) break;
 					// fallthrough in case of unparsed message
 
 				case '':
@@ -1110,8 +1173,8 @@
 			this.$el.html(buf);
 		},
 		ranks: {
-			'#': 2,
 			'~': 2,
+			'#': 2,
 			'&': 2,
 			'@': 1,
 			'%': 1,
@@ -1122,8 +1185,8 @@
 			'‽': 0
 		},
 		rankOrder: {
-			'#': 1,
-			'~': 2,
+			'~': 1,
+			'#': 2,
 			'&': 3,
 			'@': 4,
 			'%': 5,

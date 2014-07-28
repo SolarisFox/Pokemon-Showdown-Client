@@ -625,6 +625,7 @@ function Pokemon(species) {
 		if (!copyAll) {
 			selfP.removeVolatile('yawn');
 			selfP.removeVolatile('airballoon');
+			selfP.removeVolatile('typeadd');
 			selfP.removeVolatile('typechange');
 		}
 		selfP.removeVolatile('transform');
@@ -1193,8 +1194,8 @@ function Battle(frame, logFrame, noPreload) {
 			selfS.x = slot * (selfS.isBackSprite ? -1 : 1) * -50;
 			selfS.y = slot * (selfS.isBackSprite ? -1 : 1) * 10;
 			selfS.statbarOffset = 0;
-			if (!selfS.isBackSprite && slot == 1) selfS.statbarOffset = 17;
-			if (selfS.isBackSprite && slot == 1) selfS.statbarOffset = -7;
+			if (!selfS.isBackSprite) selfS.statbarOffset = 17 * slot;
+			if (selfS.isBackSprite) selfS.statbarOffset = -7 * slot;
 
 			// make sure element is in the right z-order
 			if (!slot && selfS.isBackSprite || slot && !selfS.isBackSprite) {
@@ -1268,8 +1269,8 @@ function Battle(frame, logFrame, noPreload) {
 			selfS.x = slot * (selfS.isBackSprite ? -1 : 1) * -50;
 			selfS.y = slot * (selfS.isBackSprite ? -1 : 1) * 10;
 			selfS.statbarOffset = 0;
-			if (!selfS.isBackSprite && slot == 1) selfS.statbarOffset = 17;
-			if (selfS.isBackSprite && slot == 1) selfS.statbarOffset = -7;
+			if (!selfS.isBackSprite) selfS.statbarOffset = 17 * slot;
+			if (selfS.isBackSprite) selfS.statbarOffset = -7 * slot;
 
 			// make sure element is in the right z-order
 			if (!slot && selfS.isBackSprite || slot && !selfS.isBackSprite) {
@@ -2070,7 +2071,72 @@ function Battle(frame, logFrame, noPreload) {
 			});
 			//pokemon.statbarElem.done(pokemon.statbarElem.remove());
 		};
-		this.swap = function (pokemon, target, kwargs) {
+		this.swapTo = function (pokemon, slot, kwargs) {
+			if (pokemon.slot === slot) return;
+			var target = selfS.active[slot];
+
+			if (!kwargs.silent) {
+				var fromeffect = Tools.getEffect(kwargs.from);
+				switch (fromeffect.id) {
+					case 'allyswitch':		
+						self.message('<small>' + pokemon.getName() + ' and ' + target.getLowerName() + ' switched places.</small>');
+						break;
+					default:
+						self.message('<small>' + pokemon.getName() + ' moved to the center!</small>');
+						break;
+				}
+			}
+
+			var oslot = pokemon.slot;
+
+			if (target) target.slot = pokemon.slot;
+			pokemon.slot = slot;
+			selfS.active[slot] = pokemon;
+			selfS.active[oslot] = target;
+
+			if (pokemon.hasVolatile('substitute')) pokemon.sprite.animSubFade();
+			if (target && target.hasVolatile('substitute')) target.sprite.animSubFade();
+
+			pokemon.sprite.animUnsummon(true);
+			if (target) target.sprite.animUnsummon(true);
+
+			pokemon.sprite.animSummon(slot, true);
+			if (target) target.sprite.animSummon(oslot, true);
+
+			if (pokemon.hasVolatile('substitute')) pokemon.sprite.animSub();
+			if (target && target.hasVolatile('substitute')) target.sprite.animSub();
+
+			if (pokemon.statbarElem) {
+				pokemon.statbarElem.remove();
+			}
+			if (target && target.statbarElem) {
+				target.statbarElem.remove();
+			}
+
+			self.statElem.append(selfS.getStatbarHTML(pokemon));
+			pokemon.statbarElem = self.statElem.children().last();
+			if (target) {
+				self.statElem.append(selfS.getStatbarHTML(target));
+				target.statbarElem = self.statElem.children().last();
+			}
+
+			selfS.updateStatbar(pokemon, true);
+			if (target) selfS.updateStatbar(target, true);
+
+			pokemon.statbarElem.css({
+				display: 'block',
+				left: pokemon.sprite.left - 80,
+				top: pokemon.sprite.top - 73 - pokemon.sprite.statbarOffset,
+				opacity: 1
+			});
+			if (target) target.statbarElem.css({
+				display: 'block',
+				left: target.sprite.left - 80,
+				top: target.sprite.top - 73 - target.sprite.statbarOffset,
+				opacity: 1
+			});
+		};
+		this.swapWith = function (pokemon, target, kwargs) {
 			if (pokemon === target) return;
 
 			if (!kwargs.silent) {
@@ -2163,6 +2229,7 @@ function Battle(frame, logFrame, noPreload) {
 			if (!pokemon) {
 				if (selfS.active[0]) selfS.updateStatbar(selfS.active[0], updatePrevhp, updateHp);
 				if (selfS.active[1]) selfS.updateStatbar(selfS.active[1], updatePrevhp, updateHp);
+				if (selfS.active[2]) selfS.updateStatbar(selfS.active[2], updatePrevhp, updateHp);
 				return;
 			}
 			if (!pokemon || !pokemon.statbarElem) {
@@ -2216,6 +2283,7 @@ function Battle(frame, logFrame, noPreload) {
 				imprison: '<span class="good">Imprisoning&nbsp;foe</span> ',
 				formechange: '',
 				typechange: '',
+				typeadd: '',
 				autotomize: '<span class="neutral">Lightened</span> ',
 				miracleeye: '<span class="bad">Miracle&nbsp;Eye</span> ',
 				foresight: '<span class="bad">Foresight</span> ',
@@ -2392,8 +2460,10 @@ function Battle(frame, logFrame, noPreload) {
 
 		if (self.mySide.active[0]) self.mySide.active[0].clearTurnstatuses();
 		if (self.mySide.active[1]) self.mySide.active[1].clearTurnstatuses();
+		if (self.mySide.active[2]) self.mySide.active[2].clearTurnstatuses();
 		if (self.yourSide.active[0]) self.yourSide.active[0].clearTurnstatuses();
 		if (self.yourSide.active[1]) self.yourSide.active[1].clearTurnstatuses();
+		if (self.yourSide.active[2]) self.yourSide.active[2].clearTurnstatuses();
 
 		self.log('<h2>Turn ' + turnnum + '</h2>');
 
@@ -3044,6 +3114,10 @@ function Battle(frame, logFrame, noPreload) {
 					case 'drain':
 						actions += ofpoke.getName() + ' had its energy drained!';
 						break;
+					case 'leftovers':
+					case 'shedbell':
+						actions += "" + poke.getName() + " restored a little HP using its " + effect.name + "!";
+						break;
 					default:
 						if (kwargs.absorb) {
 							actions += "" + poke.getName() + "'s " + effect.name + " absorbs the attack!";
@@ -3481,12 +3555,20 @@ function Battle(frame, logFrame, noPreload) {
 				} else switch (args[2]) {
 				case 'brn':
 					self.resultAnim(poke, 'Burn cured', 'good', animDelay);
+					if (effect.effectType === 'Item') {
+						actions += "" + poke.getName() + "'s " + effect.name + " healed its burn!";
+						break;
+					}
 					if (poke.side.n === 0) actions += "" + poke.getName() + "'s burn was healed.";
 					else actions += "" + poke.getName() + " healed its burn!";
 					break;
 				case 'tox':
 				case 'psn':
 					self.resultAnim(poke, 'Poison cured', 'good', animDelay);
+					if (effect.effectType === 'Item') {
+						actions += "" + poke.getName() + "'s " + effect.name + " cured its poison!";
+						break;
+					}
 					var n = poke.side.n; // hack for eliminating "the opposing"
 					poke.side.n = 0;
 					actions += "" + poke.getName() + " was cured of its poisoning.";
@@ -3494,14 +3576,26 @@ function Battle(frame, logFrame, noPreload) {
 					break;
 				case 'slp':
 					self.resultAnim(poke, 'Woke up', 'good', animDelay);
+					if (effect.effectType === 'Item') {
+						actions += "" + poke.getName() + "'s " + effect.name + " woke it up!";
+						break;
+					}
 					actions += "" + poke.getName() + " woke up!";
 					break;
 				case 'par':
 					self.resultAnim(poke, 'Paralysis cured', 'good', animDelay);
+					if (effect.effectType === 'Item') {
+						actions += "" + poke.getName() + "'s " + effect.name + " cured its paralysis!";
+						break;
+					}
 					actions += "" + poke.getName() + " was cured of paralysis.";
 					break;
 				case 'frz':
 					self.resultAnim(poke, 'Thawed', 'good', animDelay);
+					if (effect.effectType === 'Item') {
+						actions += "" + poke.getName() + "'s " + effect.name + " defrosted it!";
+						break;
+					}
 					actions += "" + poke.getName() + " thawed out!";
 					break;
 				default:
@@ -3722,6 +3816,9 @@ function Battle(frame, logFrame, noPreload) {
 				if (kwargs.silent) {
 					// do nothing
 				} else switch (effect.id) {
+				case 'mummy':
+					actions += "" + poke.getName() + "\'s Ability " + ability.name + " was suppressed!";
+					break;
 				default:
 					actions += "" + poke.getName() + "\'s Ability was suppressed!";
 					break;
@@ -3744,8 +3841,8 @@ function Battle(frame, logFrame, noPreload) {
 			case '-formechange':
 				var poke = this.getPokemon(args[1]);
 				var template = Tools.getTemplate(args[2]);
-				if (poke.sprite.sp.shiny) template.shiny = true;
-				poke.sprite.animTransform(template);
+				var spriteData = {'shiny': poke.sprite.sp.shiny};
+				poke.sprite.animTransform($.extend(spriteData, template));
 				poke.addVolatile('formechange'); // the formechange volatile reminds us to revert the sprite change on switch-out
 				poke.volatiles.formechange[2] = template.species;
 				poke.side.updateStatbar();
@@ -3762,19 +3859,21 @@ function Battle(frame, logFrame, noPreload) {
 				case 'typechange':
 					args[3] = Tools.escapeHTML(args[3]);
 					poke.volatiles.typechange[2] = args[3];
+					poke.removeVolatile('typeadd');
 					if (fromeffect.id) {
 						if (fromeffect.id === 'reflecttype') {
 							actions += "" + poke.getName() + "'s type changed to match " + ofpoke.getLowerName() + "'s!";
-						} else if (fromeffect.id === 'forestscurse') {
-							actions += "Grass type was added to " + poke.getLowerName();
-						} else if (fromeffect.id === 'trickortreat') {
-							actions += "Ghost type was added to " + poke.getLowerName();
 						} else {
 							actions += "" + poke.getName() + "'s " + fromeffect.name + " made it the " + args[3] + " type!";
 						}
 					} else {
 						actions += "" + poke.getName() + " transformed into the " + args[3] + " type!";
 					}
+					break;
+				case 'typeadd':
+					args[3] = Tools.escapeHTML(args[3]);
+					poke.volatiles.typeadd[2] = args[3];
+					actions += "" + args[3] + " type was added to " + poke.getLowerName() + "!";
 					break;
 				case 'powertrick':
 					self.resultAnim(poke, 'Power Trick', 'neutral', animDelay);
@@ -3985,6 +4084,10 @@ function Battle(frame, logFrame, noPreload) {
 				case 'confusion':
 					self.resultAnim(poke, 'Confusion&nbsp;ended', 'good', animDelay);
 					if (!kwargs.silent) {
+						if (fromeffect.effectType === 'Item') {
+							actions += "" + poke.getName() + "'s " + fromeffect.name + " snapped out of its confusion!";
+							break;
+						}
 						if (poke.side.n === 0) actions += "" + poke.getName() + " snapped out of its confusion.";
 						else actions += "" + poke.getName() + " snapped out of confusion!";
 					}
@@ -4978,6 +5081,7 @@ function Battle(frame, logFrame, noPreload) {
 			if (self.waitForResult()) return;
 			var poke = self.getPokemon(args[1]);
 			poke.removeVolatile('formechange');
+			poke.removeVolatile('typeadd');
 			poke.removeVolatile('typechange');
 
 			var newSpecies;
@@ -4988,8 +5092,8 @@ function Battle(frame, logFrame, noPreload) {
 				newSpecies = args[2].substr(0, commaIndex);
 			}
 			var template = Tools.getTemplate(newSpecies);
-			if (poke.sprite.sp.shiny) template.shiny = true;
-			poke.sprite.animTransform(template);
+			var spriteData = {'shiny': poke.sprite.sp.shiny};
+			poke.sprite.animTransform($.extend(spriteData, template));
 			poke.sprite.oldsp = null;
 			poke.spriteid = template.spriteid;
 			poke.side.updateStatbar();
@@ -5033,8 +5137,13 @@ function Battle(frame, logFrame, noPreload) {
 			poke.side.faint(poke);
 			break;
 		case 'swap':
-			var poke = self.getPokemon('other: ' + args[1]);
-			poke.side.swap(poke, self.getPokemon('other: ' + args[2]), kwargs);
+			if (isNaN(Number(args[2]))) {
+				var poke = self.getPokemon('other: ' + args[1]);
+				poke.side.swapWith(poke, self.getPokemon('other: ' + args[2]), kwargs);
+			} else {
+				var poke = self.getPokemon(args[1]);
+				poke.side.swapTo(poke, args[2], kwargs);
+			}
 			break;
 		case 'move':
 			self.endLastTurn();
@@ -5084,7 +5193,7 @@ function Battle(frame, logFrame, noPreload) {
 		case 'debug':
 			args.shift();
 			name = args.join(' ');
-			self.log('<div class="chat"><small style="color:#999">[DEBUG] ' + Tools.escapeHTML(name) + '.</small></div>', preempt);
+			self.log('<div class="debug"><div class="chat"><small style="color:#999">[DEBUG] ' + Tools.escapeHTML(name) + '.</small></div></div>', preempt);
 			break;
 		case 'unlink':
 			break;

@@ -1222,7 +1222,7 @@
 				if (ability.name === template.abilities['0']) return 'Abilities';
 				if (ability.name === template.abilities['1']) return 'Abilities';
 				if (ability.name === template.abilities['H']) return 'Hidden Ability';
-				return 'Illegal';
+				if (!this.curTeam || this.curTeam.format !== 'hackmons') return 'Illegal';
 			},
 			move: function(move) {
 				if (!this.curSet) return;
@@ -1234,7 +1234,7 @@
 						if (move.isViable) return 'Usable Sketch Moves';
 						else if (move.id !== 'chatter' && move.id !== 'struggle') return 'Sketch Moves';
 					}
-					return 'Illegal';
+					if (!this.curTeam || this.curTeam.format !== 'hackmons') return 'Illegal';
 				}
 				var speciesid = toId(this.curSet.species);
 				if (move.isViable) return 'Usable Moves';
@@ -2049,15 +2049,17 @@
 					text += 'Happiness: '+curSet.happiness+"\n";
 				}
 				var first = true;
-				for (var j in curSet.evs) {
-					if (!curSet.evs[j]) continue;
-					if (first) {
-						text += 'EVs: ';
-						first = false;
-					} else {
-						text += ' / ';
+				if (curSet.evs) {
+					for (var j in BattleStatNames) {
+						if (!curSet.evs[j]) continue;
+						if (first) {
+							text += 'EVs: ';
+							first = false;
+						} else {
+							text += ' / ';
+						}
+						text += ''+curSet.evs[j]+' '+BattleStatNames[j];
 					}
-					text += ''+curSet.evs[j]+' '+BattlePOStatNames[j];
 				}
 				if (!first) {
 					text += "\n";
@@ -2094,7 +2096,7 @@
 						}
 					}
 					if (!defaultIvs) {
-						for (var stat in curSet.ivs) {
+						for (var stat in BattleStatNames) {
 							if (typeof curSet.ivs[stat] === 'undefined' || curSet.ivs[stat] == 31) continue;
 							if (first) {
 								text += 'IVs: ';
@@ -2102,7 +2104,7 @@
 							} else {
 								text += ' / ';
 							}
-							text += ''+curSet.ivs[stat]+' '+BattlePOStatNames[stat];
+							text += ''+curSet.ivs[stat]+' '+BattleStatNames[stat];
 						}
 					}
 				}

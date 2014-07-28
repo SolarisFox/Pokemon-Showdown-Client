@@ -34,9 +34,10 @@
 			// this.$('button[name=joinRoomPopup]').focus();
 		},
 		joinRoomPopup: function() {
-			var roomName = prompt("Room name?");
-			if (!roomName) return;
-			app.tryJoinRoom(roomName);
+			app.addPopupPrompt("Room name:", "Join room", function(room) {
+				if (!room) return;
+				app.tryJoinRoom(room);
+			});
 		},
 		update: function(rooms) {
 			if (rooms) {
@@ -70,9 +71,18 @@
 			}
 
 			buf += '<h2>Chat rooms</h2>';
-			rooms.chat.sort(function(a, b) {
-				return b.userCount - a.userCount;
-			});
+			var order = this.order = (Tools.prefs('order') || {});
+			if (order === 'alphabetical') {
+				rooms.chat.sort(function(a, b){
+					if (toId(a.title) < toId(b.title)) return -1;
+					if (toId(a.title) > toId(b.title)) return 1;
+					return 0;
+				});
+			} else {
+				rooms.chat.sort(function(a, b) {
+					return b.userCount - a.userCount;
+				});
+			}
 			for (var i=0; i<rooms.chat.length; i++) {
 				var roomData = rooms.chat[i];
 				var id = toId(roomData.title);
